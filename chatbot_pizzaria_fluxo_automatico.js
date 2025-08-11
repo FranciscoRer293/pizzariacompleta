@@ -414,7 +414,7 @@ const client = new Client({
     puppeteer: { headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] }
 });
 
-client.on('qr', qr => qrcode.generate(qr, { small: true }));
+client.on('qr', qr => console.log(qr));
 
 client.on('ready', async () => {
     console.log('✅ WhatsApp pronto!');
