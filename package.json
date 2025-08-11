@@ -1,0 +1,13 @@
+{
+  "name": "bot-pizzaria-di-casa-updated",
+  "version": "1.0.0",
+  "main": "chatbot_pizzaria_fluxo_automatico.js",
+  "scripts": {
+    "start": "node chatbot_pizzaria_fluxo_automatico.js"
+  },
+  "dependencies": {
+    "moment-timezone": "^0.5.48",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.32.0"
+  }
+}
