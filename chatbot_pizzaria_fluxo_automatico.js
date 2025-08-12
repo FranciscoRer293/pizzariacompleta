@@ -7,14 +7,53 @@ const readline = require('readline'); // Adicionado para ler o terminal
 
 // === CONFIGURAÇÕES ===
 // Coloque aqui o ID do grupo (ex: '120363025863838383@g.us')
-const GRUPO_PEDIDOS = '120363420214800456@g.us'; 
+const GRUPO_PEDIDOS = '120363420214800456@g.us';
 
 const TAXAS_POR_BAIRRO = {
     "centro": 5,
-    "conjunto joão paulo ii": 2,
-    "conjunto vale do pindaré": 2,
+    "conjunto joao paulo ii": 2,
+    "conjunto vale do pindare": 2,
     "conjunto vale do rio doce": 2,
-    "entroncamento": 2
+    "entroncamento": 2,
+    "barra azul": 5,
+    "bairro cikel": 5,
+    "brasil novo": 5,
+    "bairro getat": 5,
+    "bairro jacu": 5,
+    "jardim alah": 5,
+    "jardim america": 5,
+    "jardim brasil": 5,
+    "jardim gloria 1": 5,
+    "jardim gloria 2": 5,
+    "jardim gloria 3": 5,
+    "jardim gloria city": 5,
+    "vila laranjeiras": 5,
+    "matadouro": 5,
+    "monte sinai": 5,
+    "nova acailandia": 5,
+    "parque das nacoes": 5,
+    "parque industrial": 5,
+    "parque planalto": 5,
+    "polo moveleiro": 5,
+    "porto seguro ii": 5,
+    "vila flavio dino": 5,
+    "vila bom jardim": 5,
+    "vila ildemar": 5,
+    "vila capeloza": 5,
+    "vila ipiranga": 5,
+    "vila maranhao": 5,
+    "vila progresso 1": 5,
+    "vila progresso 2": 5,
+    "vila sao francisco": 5,
+    "vila sarney filho": 5,
+    "vila tancredo neves": 5,
+    "plano da serra": 5,
+    "pequia": 5,
+    "residencial parque da lagoa": 5,
+    "residencial tropical": 5,
+    "residencial colina park": 5,
+    "residencial ouro verde": 5,
+    "residencial parati": 5
 };
 const TAXA_PADRAO = 5;
 
@@ -64,7 +103,7 @@ const enviar = async (destino, texto, media = null) => {
     if (!texto.includes('ℹ️ Digite 0')) texto += rodape;
     const chat = await client.getChatById(destino);
     await chat.sendStateTyping();
-    await esperar(Math.min(200 + texto.length * 3, 1000)); 
+    await esperar(Math.min(200 + texto.length * 3, 1000));
 
     if (media) {
         await client.sendMessage(destino, media, { caption: texto });
@@ -118,13 +157,13 @@ async function enviarPromocaoEmMassa() {
 
 // === Lógica de Parsing ===
 function normalizarTexto(txt) {
-    const mapaNumeros = { 'um':'1','uma':'1','dois':'2','duas':'2','três':'3','tres':'3','quatro':'4','cinco':'5','seis':'6','sete':'7','oito':'8','nove':'9' };
+    const mapaNumeros = { 'um': '1', 'uma': '1', 'dois': '2', 'duas': '2', 'três': '3', 'tres': '3', 'quatro': '4', 'cinco': '5', 'seis': '6', 'sete': '7', 'oito': '8', 'nove': '9' };
     let texto = txt.toLowerCase();
 
     // Remove acentos e caracteres especiais para melhor comparação
     texto = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, "");
     texto = texto.replace('ç', 'c');
-    
+
     for (const [key, value] of Object.entries(mapaNumeros)) {
         texto = texto.replace(new RegExp(`\\b${key}\\b`, 'gi'), value);
     }
@@ -167,14 +206,14 @@ function parsePedido(txt) {
                 saboresEncontrados = [normalizarTexto(matchMetade[1].trim()), normalizarTexto(matchMetade[2].trim())];
             }
         }
-        
+
         pedidoAtual.sabores = saboresEncontrados;
 
         if (pedidoAtual.tamanho && pedidoAtual.sabores.length > 0) {
             pedidos.push(pedidoAtual);
         }
     }
-    
+
     if (pedidos.length === 0) {
         return null;
     }
@@ -199,17 +238,17 @@ function calcularTotal(pedidos, taxaEntrega) {
         if (pedido.borda) {
             precoItem += CARDAPIO.Borda;
         }
-        
+
         total += pedido.qtd * precoItem;
-        
+
         let saboresTexto = pedido.sabores.map(s => s.replace(/\b\w/g, c => c.toUpperCase())).join(' e ');
         let bordaTexto = pedido.borda ? ' com borda' : '';
-        
+
         resumo += `\n🍕 ${pedido.qtd}x Pizza ${pedido.tamanho} (${saboresTexto})${bordaTexto} - R$ ${(pedido.qtd * precoItem).toFixed(2)}`;
     });
-    
+
     total += taxaEntrega;
-    
+
     return { resumo: resumo, total: total };
 }
 
@@ -243,20 +282,20 @@ async function tratarMenu(from, text, pushname) {
 
 📌 *Para fazer o pedido, digite no formato abaixo*:
 Exemplo: 1 G Calabresa com borda e 1 F metade Frango/Catupiry, metade Portuguesa`;
-    
+
     if (text === '1') {
         return enviar(from, menuTxt, menuImg);
     }
     if (text === '2' || text === '5') return enviar(from, `Cardápio digital: https://instadelivery.com.br/pizzariadicasa1`);
     if (text === '3') return enviar(from, '👨‍🍳 Um atendente irá lhe atender em instantes.');
     if (text === '4') return enviar(from, '🔥 Promoção: Na compra de 2 G, ganhe 1 refrigerante 1L!');
-    
+
     const pedidos = parsePedido(text);
-    
+
     if (pedidos && pedidos.error) {
         return enviar(from, pedidos.error);
     }
-    
+
     if (pedidos && pedidos.length > 0) {
         const { resumo, total } = calcularTotal(pedidos, 0);
         pedidosEmAndamento.set(from, { resumo, total, pedidos, etapa: 'bairro', taxaEntrega: 0, pushname: pushname });
@@ -273,72 +312,72 @@ ${resumo}
 }
 
 async function tratarPedido(from, text, estado) {
-  const idx = etapas.indexOf(estado.etapa);
-  
-  if (estado.etapa === 'bairro') {
-    const bairroLower = text.toLowerCase().trim();
-    const taxaEntrega = TAXAS_POR_BAIRRO[bairroLower] || TAXA_PADRAO;
-    const { resumo, total } = calcularTotal(estado.pedidos, taxaEntrega);
-    
-    estado.nome = estado.pushname || 'Cliente';
-    estado.bairro = text;
-    estado.taxaEntrega = taxaEntrega;
-    estado.resumo = resumo;
-    estado.total = total;
-    estado.etapa = 'confirmacao';
+    const idx = etapas.indexOf(estado.etapa);
 
-    let mensagemTaxa = `🚚 *Taxa de entrega para ${text}:* R$ ${taxaEntrega.toFixed(2)}\n`;
-    if (!TAXAS_POR_BAIRRO[bairroLower]) {
-        mensagemTaxa = `⚠️ O bairro "${text}" não está na nossa lista. Será aplicada a taxa padrão de R$ ${TAXA_PADRAO.toFixed(2)}.\n`;
-    }
+    if (estado.etapa === 'bairro') {
+        const bairroLower = text.toLowerCase().trim();
+        const taxaEntrega = TAXAS_POR_BAIRRO[bairroLower] || TAXA_PADRAO;
+        const { resumo, total } = calcularTotal(estado.pedidos, taxaEntrega);
 
-    return enviar(from, `${mensagemTaxa}💵 *Total atualizado:* R$ ${total.toFixed(2)}
+        estado.nome = estado.pushname || 'Cliente';
+        estado.bairro = text;
+        estado.taxaEntrega = taxaEntrega;
+        estado.resumo = resumo;
+        estado.total = total;
+        estado.etapa = 'confirmacao';
+
+        let mensagemTaxa = `🚚 *Taxa de entrega para ${text}:* R$ ${taxaEntrega.toFixed(2)}\n`;
+        if (!TAXAS_POR_BAIRRO[bairroLower]) {
+            mensagemTaxa = `⚠️ O bairro "${text}" não está na nossa lista. Será aplicada a taxa padrão de R$ ${TAXA_PADRAO.toFixed(2)}.\n`;
+        }
+
+        return enviar(from, `${mensagemTaxa}💵 *Total atualizado:* R$ ${total.toFixed(2)}
 \n*Confirma o pedido?* (Sim/Não)`);
-  }
-
-  if (estado.etapa === 'confirmacao') {
-    const resposta = text.toLowerCase();
-    if (resposta === 'sim' || resposta === 's') {
-      estado.etapa = 'nome';
-      return enviar(from, `Ótimo! Agora vamos para seus dados.\nDigite seu ${estado.etapa}:\n${exemplosEtapas[estado.etapa]}`);
-    } else if (resposta === 'nao' || resposta === 'n') {
-      pedidosEmAndamento.delete(from);
-      return enviar(from, 'Tudo bem! O pedido foi cancelado. Digite "0" para voltar ao menu inicial.');
-    } else {
-      return enviar(from, '❌ Por favor, responda com "Sim" ou "Não" para confirmar o pedido.');
     }
-  }
 
-  if (idx > -1) {
-    estado[estado.etapa] = text;
-    if (idx < etapas.length - 1) {
-      estado.etapa = etapas[idx + 1];
-      return enviar(from, `Digite seu ${estado.etapa}:\n${exemplosEtapas[estado.etapa]}`);
-    } else {
-      estado.pagamento = text;
-      estado.status = text.toLowerCase().includes('pix') ? 'Pendente' : 'Pago';
+    if (estado.etapa === 'confirmacao') {
+        const resposta = text.toLowerCase();
+        if (resposta === 'sim' || resposta === 's') {
+            estado.etapa = 'nome';
+            return enviar(from, `Ótimo! Agora vamos para seus dados.\nDigite seu ${estado.etapa}:\n${exemplosEtapas[estado.etapa]}`);
+        } else if (resposta === 'nao' || resposta === 'n') {
+            pedidosEmAndamento.delete(from);
+            return enviar(from, 'Tudo bem! O pedido foi cancelado. Digite "0" para voltar ao menu inicial.');
+        } else {
+            return enviar(from, '❌ Por favor, responda com "Sim" ou "Não" para confirmar o pedido.');
+        }
+    }
 
-      if (estado.status === 'Pendente') {
-        estado.aguardandoComprovante = true;
-        return enviar(from, `💳 PIX — envie o comprovante (JPG, PNG ou PDF).\nChave: ${PIX_INFO.chave}\nNome: ${PIX_INFO.nome}\nBanco: ${PIX_INFO.banco}\nValor: R$${estado.total.toFixed(2)}`);
-      } else {
-        if (GRUPO_PEDIDOS) {
-          await client.sendMessage(GRUPO_PEDIDOS,
-            `📦 *NOVO PEDIDO CONFIRMADO* 📦
+    if (idx > -1) {
+        estado[estado.etapa] = text;
+        if (idx < etapas.length - 1) {
+            estado.etapa = etapas[idx + 1];
+            return enviar(from, `Digite seu ${estado.etapa}:\n${exemplosEtapas[estado.etapa]}`);
+        } else {
+            estado.pagamento = text;
+            estado.status = text.toLowerCase().includes('pix') ? 'Pendente' : 'Pago';
+
+            if (estado.status === 'Pendente') {
+                estado.aguardandoComprovante = true;
+                return enviar(from, `💳 PIX — envie o comprovante (JPG, PNG ou PDF).\nChave: ${PIX_INFO.chave}\nNome: ${PIX_INFO.nome}\nBanco: ${PIX_INFO.banco}\nValor: R$${estado.total.toFixed(2)}`);
+            } else {
+                if (GRUPO_PEDIDOS) {
+                    await client.sendMessage(GRUPO_PEDIDOS,
+                        `📦 *NOVO PEDIDO CONFIRMADO* 📦
 👤 Cliente: ${estado.nome}
 🏠 Endereço: ${estado.endereco}, ${estado.bairro}
 🛒 Pedido: ${estado.resumo}
 💵 Total: R$ ${estado.total.toFixed(2)}
 💳 Pagamento: ${estado.pagamento}
 ⏰ Horário: ${moment().format('DD/MM/YYYY HH:mm')}`
-          );
+                    );
+                }
+                pedidosEmAndamento.delete(from);
+                return enviar(from, `✅ Pedido confirmado! Previsão: 40 minutos.`);
+            }
         }
-        pedidosEmAndamento.delete(from);
-        return enviar(from, `✅ Pedido confirmado! Previsão: 40 minutos.`);
-      }
     }
-  }
-  return enviar(from, `❌ Não entendi. Por favor, digite seu ${estado.etapa}:\n${exemplosEtapas[estado.etapa]}`);
+    return enviar(from, `❌ Não entendi. Por favor, digite seu ${estado.etapa}:\n${exemplosEtapas[estado.etapa]}`);
 }
 
 // === Handler Principal ===
@@ -355,7 +394,7 @@ async function processarMensagem(from, raw, pushname) {
     if (!from.endsWith('@g.us')) {
         salvarContato(from);
     }
-    
+
     // Prioriza comandos especiais que não dependem do estado do pedido
     if (textoNormalizado === 'promocao off') {
         console.log('Comando "promocao off" recebido.');
@@ -363,7 +402,7 @@ async function processarMensagem(from, raw, pushname) {
         pedidosEmAndamento.delete(from);
         return enviar(from, '✅ Você não receberá mais nossas promoções. Para reativar, basta interagir com o bot novamente.');
     }
-    
+
     if (textoNormalizado === 'promocao agora') {
         console.log('Comando "promocao agora" recebido.');
         if (contatosPromocao.size === 0) {
@@ -372,7 +411,7 @@ async function processarMensagem(from, raw, pushname) {
             await enviar(from, `📢 Enviando promoção para ${contatosPromocao.size} contatos.`);
             enviarPromocaoEmMassa();
         }
-        return; 
+        return;
     }
 
     if (saudacoes.includes(textoNormalizado) || textoNormalizado === '0') {
@@ -380,7 +419,7 @@ async function processarMensagem(from, raw, pushname) {
         pedidosEmAndamento.delete(from);
         return enviar(from, menuInicial(pushname));
     }
-    
+
     // Responde se o comando de promoção foi digitado incorretamente
     if (textoNormalizado.includes('promocao') && textoNormalizado !== 'promocao agora' && textoNormalizado !== 'promocao off') {
         console.log('Comando de promoção digitado incorretamente.');
@@ -411,7 +450,7 @@ async function processarMensagem(from, raw, pushname) {
 
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: { headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] }
+    puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] }
 });
 
 client.on('qr', qr => console.log(qr));
@@ -426,10 +465,10 @@ client.on('ready', async () => {
     }
 
     carregarContatos();
-    
+
     setInterval(() => {
         const agora = moment();
-        
+
         if (promocaoEnviadaHoje && agora.hours() === 0 && agora.minutes() === 0) {
             promocaoEnviadaHoje = false;
             console.log('📅 Flag de promoção resetado para um novo dia.');
@@ -476,7 +515,7 @@ client.on('message', async msg => {
         }
         const nomeArquivo = `comprovante_${from.replace(/[^0-9]/g, '')}_${moment().format('YYYY-MM-DD_HH-mm')}.${ext}`;
         fs.writeFileSync(path.join(DIR_COMPROVANTES, nomeArquivo), Buffer.from(media.data, 'base64'));
-        
+
         estado.status = 'Pago';
         estado.aguardandoComprovante = false;
 
