@@ -3,7 +3,14 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const moment = require('moment-timezone');
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline'); // Adicionado para ler o terminal
+const readline = require('readline');
+
+// === CONFIGURAÇÕES DA OPENAI ===
+require('dotenv').config();
+const { OpenAI } = require("openai");
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
 
 // === CONFIGURAÇÕES ===
 // Coloque aqui o ID do grupo (ex: '120363025863838383@g.us')
@@ -380,6 +387,31 @@ async function tratarPedido(from, text, estado) {
     return enviar(from, `❌ Não entendi. Por favor, digite seu ${estado.etapa}:\n${exemplosEtapas[estado.etapa]}`);
 }
 
+// === NOVA FUNÇÃO PARA RESPOSTAS COM IA ===
+async function responderComIA(pergunta, from) {
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                {
+                    role: "system",
+                    content: "Você é um assistente de chatbot de uma pizzaria chamada Pizzaria Di Casa. Sua função é responder a perguntas gerais dos clientes sobre o menu, horário de funcionamento, sabores de pizza, etc. NÃO FALE sobre pedidos. Se a pergunta for sobre um pedido (por exemplo, 'Quero uma pizza G'), direcione o cliente a digitar '1' para ver o menu e fazer o pedido. Se a pergunta for fora do contexto de pizza, seja breve e educado."
+                },
+                {
+                    role: "user",
+                    content: pergunta
+                }
+            ],
+        });
+        const resposta = completion.choices[0].message.content;
+        return enviar(from, resposta);
+    } catch (error) {
+        console.error("Erro na API da OpenAI:", error);
+        return enviar(from, `❌ Ocorreu um erro ao tentar usar a inteligência artificial. Por favor, tente novamente mais tarde.`);
+    }
+}
+
+
 // === Handler Principal ===
 async function processarMensagem(from, raw, pushname) {
     const text = raw.trim();
@@ -444,7 +476,12 @@ async function processarMensagem(from, raw, pushname) {
     } else {
         // Se não há pedido em andamento, trata como uma opção do menu
         console.log('Cliente sem pedido em andamento. Tratando como comando do menu.');
-        return tratarMenu(from, text, pushname);
+        if (['1', '2', '3', '4', '5'].includes(text)) {
+            return tratarMenu(from, text, pushname);
+        } else {
+            // Se o texto não for um comando do menu, passa para a IA
+            return responderComIA(text, from);
+        }
     }
 }
 
@@ -481,11 +518,10 @@ client.on('ready', async () => {
 
     }, 60000); // Verifica a cada minuto
 
-    // === NOVO CÓDIGO: LER O TERMINAL ===
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
-        prompt: '' // Remove o prompt padrão para não poluir o terminal
+        prompt: ''
     });
 
     rl.on('line', (input) => {
@@ -494,7 +530,6 @@ client.on('ready', async () => {
             console.log('\nComando "sendpromo" recebido do terminal.');
             enviarPromocaoEmMassa();
         } else {
-            // Isso previne que o bot reaja a qualquer outra coisa digitada no terminal
             console.log(`\n❌ Comando desconhecido no terminal: ${comando}`);
         }
     });
