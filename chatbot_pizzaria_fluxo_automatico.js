@@ -3,7 +3,8 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const moment = require('moment-timezone');
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline'); // Adicionado para ler o terminal
+const readline = require('readline'); 
+const OpenAI = require('openai'); // ADICIONADO: Importa a biblioteca do OpenAI
 
 // === CONFIGURAÇÕES ===
 // Coloque aqui o ID do grupo (ex: '120363025863838383@g.us')
@@ -55,6 +56,11 @@ const MENSAGEM_PROMOCAO = '🔥 PROMOÇÃO DO DIA! 🔥\nNa compra de 2 pizzas g
 
 let contatosPromocao = new Set();
 let promocaoEnviadaHoje = false;
+
+// === NOVO CÓDIGO: INICIALIZA O CLIENTE DA OPENAI ===
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
 
 // === Funções Utilitárias ===
 const esperar = ms => new Promise(res => setTimeout(res, ms));
@@ -131,61 +137,85 @@ function normalizarTexto(txt) {
     return texto.trim();
 }
 
-function parsePedido(txt) {
-    const texto = normalizarTexto(txt);
-    const pedidos = [];
-    const tamanhos = ['p', 'g', 'f', 'pequena', 'grande', 'familia'];
-    const saboresValidos = CARDAPIO.Sabores.map(s => normalizarTexto(s));
+// === NOVO CÓDIGO: FUNÇÃO QUE USA A IA PARA PARSEAR O PEDIDO ===
+async function getPedidoFromIA(texto) {
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4", // Use "gpt-3.5-turbo" se quiser economizar
+            messages: [
+                {
+                    "role": "system",
+                    "content": `Você é um assistente de chatbot de uma pizzaria. Sua principal função é extrair detalhes de pedidos de pizza do cliente a partir da conversa em português. 
+                    Se o pedido for sobre pizzas do cardápio, extraia as informações no formato JSON. Se não for um pedido de pizza (ex: saudações, outras perguntas), retorne um JSON com o campo "erro".
+                    
+                    As pizzas disponíveis são nos tamanhos P, G, F e os sabores são ${CARDAPIO.Sabores.join(', ')}. O cliente também pode pedir "com borda". Se o tamanho não for especificado, considere G. Se o sabor não for especificado, considere "Mussarela".
+                    
+                    Formato de saída JSON:
+                    {
+                      "pedido": [
+                        {
+                          "qtd": (número),
+                          "tamanho": "(P, G, F)",
+                          "sabores": ["sabor1", "sabor2"],
+                          "borda": (true/false)
+                        },
+                        ...
+                      ],
+                      "erro": (string com a mensagem de erro, se houver)
+                    }
+                    
+                    Exemplos de interação:
+                    Cliente: "Queria uma pizza grande de calabresa com borda e 1 pequena de frango com catupiry."
+                    Resposta:
+                    {
+                      "pedido": [
+                        { "qtd": 1, "tamanho": "G", "sabores": ["Calabresa"], "borda": true },
+                        { "qtd": 1, "tamanho": "P", "sabores": ["Frango com Catupiry"], "borda": false }
+                      ]
+                    }
+                    
+                    Cliente: "Me vê duas pizzas grandes, uma de calabresa e outra metade portuguesa metade quatro queijos"
+                    Resposta:
+                    {
+                      "pedido": [
+                        { "qtd": 1, "tamanho": "G", "sabores": ["Calabresa"], "borda": false },
+                        { "qtd": 1, "tamanho": "G", "sabores": ["Portuguesa", "Quatro Queijos"], "borda": false }
+                      ]
+                    }
+                    
+                    Cliente: "Olá, bom dia!"
+                    Resposta:
+                    {
+                      "erro": "Olá! Seja bem-vindo à Pizzaria Di Casa!"
+                    }
+                    
+                    Cliente: "Qual o telefone de vocês?"
+                    Resposta:
+                    {
+                      "erro": "O nosso telefone é (99) 98278-6800."
+                    }
+                    
+                    Se o cliente pedir um sabor que não existe no cardápio, retorne um erro informando.
+                    `
+                },
+                {
+                    "role": "user",
+                    "content": texto
+                }
+            ],
+            temperature: 0.1,
+            max_tokens: 500,
+        });
 
-    const partes = texto.split(/(?: e | mais )/i);
+        const respostaIA = response.choices[0].message.content;
+        return JSON.parse(respostaIA);
 
-    for (const parte of partes) {
-        let pedidoAtual = { qtd: 1, tamanho: null, sabores: [], borda: false };
-        let tokens = parte.split(/\s+|com|,|\//);
-        tokens = tokens.filter(token => token.trim() !== '');
-
-        let saboresEncontrados = [];
-        let bordaEncontrada = false;
-
-        for (const token of tokens) {
-            const numero = parseInt(token);
-            if (!isNaN(numero)) {
-                pedidoAtual.qtd = numero;
-            } else if (tamanhos.includes(token)) {
-                pedidoAtual.tamanho = token.charAt(0).toUpperCase();
-            } else if (token === 'borda') {
-                pedidoAtual.borda = true;
-            } else if (saboresValidos.includes(token)) {
-                saboresEncontrados.push(token);
-            }
-        }
-
-        if (parte.includes('metade')) {
-            const regexMetade = /metade\s*([^,]+),\s*metade\s*([^,]+)/i;
-            const matchMetade = parte.match(regexMetade);
-            if (matchMetade) {
-                saboresEncontrados = [normalizarTexto(matchMetade[1].trim()), normalizarTexto(matchMetade[2].trim())];
-            }
-        }
-        
-        pedidoAtual.sabores = saboresEncontrados;
-
-        if (pedidoAtual.tamanho && pedidoAtual.sabores.length > 0) {
-            pedidos.push(pedidoAtual);
-        }
+    } catch (error) {
+        console.error('❌ Erro ao comunicar com a OpenAI:', error);
+        return { erro: "Desculpe, tive um problema para processar seu pedido. Poderia repetir?" };
     }
-    
-    if (pedidos.length === 0) {
-        return null;
-    }
-
-    const saboresInvalidos = pedidos.flatMap(p => p.sabores).filter(s => !saboresValidos.includes(s));
-    if (saboresInvalidos.length > 0) {
-        return { error: `❌ Sabor(es) não encontrado(s): ${saboresInvalidos.join(', ')}.\nPor favor, verifique a ortografia do seu pedido.` };
-    }
-
-    return pedidos;
 }
+
 
 // === NOVA FUNÇÃO: Calcular o total do pedido ===
 function calcularTotal(pedidos, taxaEntrega) {
@@ -251,10 +281,15 @@ Exemplo: 1 G Calabresa com borda e 1 F metade Frango/Catupiry, metade Portuguesa
     if (text === '3') return enviar(from, '👨‍🍳 Um atendente irá lhe atender em instantes.');
     if (text === '4') return enviar(from, '🔥 Promoção: Na compra de 2 G, ganhe 1 refrigerante 1L!');
     
-    const pedidos = parsePedido(text);
+    // === CÓDIGO ANTIGO: parsear pedido manualmente ===
+    // const pedidos = parsePedido(text);
     
-    if (pedidos && pedidos.error) {
-        return enviar(from, pedidos.error);
+    // === NOVO CÓDIGO: usa a IA para parsear o pedido ===
+    const respostaIA = await getPedidoFromIA(text);
+    const pedidos = respostaIA.pedido;
+
+    if (respostaIA.erro) {
+        return enviar(from, respostaIA.erro);
     }
     
     if (pedidos && pedidos.length > 0) {
